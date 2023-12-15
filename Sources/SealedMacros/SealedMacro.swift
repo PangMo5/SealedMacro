@@ -22,8 +22,11 @@ extension SealedMacro: MemberMacro {
         let typeKey = arguments.first(where: { $0.label?.text == "typeKey" })?
             .expression.as(StringLiteralExprSyntax.self)?
             .segments.first?.description ?? "type"
+        let resilientKey = arguments.first(where: { $0.label?.text == "resilientKey" })?
+            .expression.as(StringLiteralExprSyntax.self)?
+            .segments.first?.description
 
-        let allCaseNames = enumDecl.allCaseIdentifiers.map(\.text)
+        let allCaseNames = enumDecl.allCaseIdentifiers.map(\.text).filter { $0 != resilientKey }
         let allCaseAssociatedTypes = enumDecl.allCaseAssociatedType.map(\.description)
 
         guard allCaseNames.count == allCaseAssociatedTypes.count else {
@@ -32,37 +35,39 @@ extension SealedMacro: MemberMacro {
 
         let cases: Zip2Sequence<[String], [String]> = zip(allCaseNames, allCaseAssociatedTypes)
 
-        let decodeSyntax: DeclSyntax = 
-        """
-        \(raw: enumDecl.accessLevel.initalizerModifier) init(from decoder: Decoder) throws {
-            let typeContainer = try decoder.container(keyedBy: TypeCodingKey.self)
-            let type = try typeContainer.decode(ParseCodingKey.self, forKey: .\(raw: typeKey))
-            let container = try decoder.singleValueContainer()
-            switch type {
-            \(raw: cases.map { "case .\($0.0):\n        self = .\($0.0)(try container.decode(\($0.1).self))" }.joined(separator: "\n    "))
+        let decodeSyntax: DeclSyntax
+        if let resilientKey {
+            decodeSyntax =
+            """
+            \(raw: enumDecl.accessLevel.initalizerModifier) init(from decoder: Decoder) throws {
+                let typeContainer = try decoder.container(keyedBy: TypeCodingKey.self)
+                let type = try? typeContainer.decode(ParseCodingKey.self, forKey: .\(raw: typeKey))
+                let container = try decoder.singleValueContainer()
+                switch type {
+                \(raw: cases.map { "case .\($0.0):\n        self = .\($0.0)(try container.decode(\($0.1).self))" }.joined(separator: "\n    "))
+                default:
+                    self = .\(raw: resilientKey)
+                }
             }
+            """
+        } else {
+            decodeSyntax =
+            """
+            \(raw: enumDecl.accessLevel.initalizerModifier) init(from decoder: Decoder) throws {
+                let typeContainer = try decoder.container(keyedBy: TypeCodingKey.self)
+                let type = try typeContainer.decode(ParseCodingKey.self, forKey: .\(raw: typeKey))
+                let container = try decoder.singleValueContainer()
+                switch type {
+                \(raw: cases.map { "case .\($0.0):\n        self = .\($0.0)(try container.decode(\($0.1).self))" }.joined(separator: "\n    "))
+                }
+            }
+            """
         }
-        """
-
-        let encodeSyntax: DeclSyntax = 
-        """
-        \(raw: enumDecl.accessLevel.initalizerModifier) func encode(to encoder: Encoder) throws {
-            var container = encoder.singleValueContainer()
-            switch self {
-            \(raw: cases.map(\.0).map { "case .\($0)(let \($0)): try container.encode(\($0))" }.joined(separator: "\n    "))
-            }
-            var typeContainer = encoder.container(keyedBy: TypeCodingKey.self)
-            switch self {
-            \(raw: cases.map { "case .\($0.0): try typeContainer.encode(ParseCodingKey.\($0.0), forKey: .\(typeKey))" }.joined(separator: "\n    "))
-            }
-        }
-        """
 
         let codingKeySyntaxes: [DeclSyntax] = (try? codingKeySyntaxes(of: node, providingPeersOf: declaration)) ?? []
 
         return [
-            decodeSyntax,
-            encodeSyntax
+            decodeSyntax
         ] + codingKeySyntaxes
     }
 
@@ -80,6 +85,9 @@ extension SealedMacro: MemberMacro {
         let typeKey = arguments.first(where: { $0.label?.text == "typeKey" })?
             .expression.as(StringLiteralExprSyntax.self)?
             .segments.first?.description ?? "type"
+        let resilientKey = arguments.first(where: { $0.label?.text == "resilientKey" })?
+            .expression.as(StringLiteralExprSyntax.self)?
+            .segments.first?.description
 
         let declTypeSyntax: DeclSyntax = """
         private enum TypeCodingKey: String, CodingKey {
@@ -87,7 +95,7 @@ extension SealedMacro: MemberMacro {
         }
         """
 
-        let allCaseNames = enumDecl.allCaseIdentifiers.map(\.text)
+        let allCaseNames = enumDecl.allCaseIdentifiers.map(\.text).filter { $0 != resilientKey }
         let allCasesParsingKey: [String]
 
         guard let typeRule = TypeParseRule(rawValue: typeParseRule) else {
@@ -121,7 +129,7 @@ extension SealedMacro: MemberMacro {
 
         let cases = zip(allCaseNames, allCasesParsingKey)
         let parseTypeSyntax: DeclSyntax = """
-        private enum ParseCodingKey: String, CodingKey, Codable {
+        private enum ParseCodingKey: String, CodingKey, Decodable {
             \(raw: cases.map { "case \($0.0) = \"\($0.1)\"" }.joined(separator: "\n    "))
         }
         """

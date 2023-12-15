@@ -12,7 +12,7 @@ final class SealedGeneratorTests: XCTestCase {
         let source = 
         """
         @Sealed(typeKey: "kind", typeParseRule: .upperCase)
-        public enum ImageSource: Codable {
+        public enum ImageSource: Decodable {
             case image(Image)
             case lottie(Lottie)
             case icon(Icon)
@@ -20,7 +20,7 @@ final class SealedGeneratorTests: XCTestCase {
         """
         let expected = 
         """
-        public enum ImageSource: Codable {
+        public enum ImageSource: Decodable {
             case image(Image)
             case lottie(Lottie)
             case icon(Icon)
@@ -39,32 +39,11 @@ final class SealedGeneratorTests: XCTestCase {
                 }
             }
 
-            public func encode(to encoder: Encoder) throws {
-                var container = encoder.singleValueContainer()
-                switch self {
-                case .image(let image):
-                    try container.encode(image)
-                case .lottie(let lottie):
-                    try container.encode(lottie)
-                case .icon(let icon):
-                    try container.encode(icon)
-                }
-                var typeContainer = encoder.container(keyedBy: TypeCodingKey.self)
-                switch self {
-                case .image:
-                    try typeContainer.encode(ParseCodingKey.image, forKey: .kind)
-                case .lottie:
-                    try typeContainer.encode(ParseCodingKey.lottie, forKey: .kind)
-                case .icon:
-                    try typeContainer.encode(ParseCodingKey.icon, forKey: .kind)
-                }
-            }
-
             private enum TypeCodingKey: String, CodingKey {
                 case kind
             }
 
-            private enum ParseCodingKey: String, CodingKey, Codable {
+            private enum ParseCodingKey: String, CodingKey, Decodable {
                 case image = "IMAGE"
                 case lottie = "LOTTIE"
                 case icon = "ICON"
@@ -78,14 +57,14 @@ final class SealedGeneratorTests: XCTestCase {
         let source = 
         """
         @Sealed(typeParseRule: .lowerCase)
-        enum ImageSource: Codable {
+        enum ImageSource: Decodable {
             case image(Image)
             case lottie(Lottie)
             case icon(Icon)
         }
         """
         let expected = """
-        enum ImageSource: Codable {
+        enum ImageSource: Decodable {
             case image(Image)
             case lottie(Lottie)
             case icon(Icon)
@@ -104,32 +83,11 @@ final class SealedGeneratorTests: XCTestCase {
                 }
             }
 
-            internal func encode(to encoder: Encoder) throws {
-                var container = encoder.singleValueContainer()
-                switch self {
-                case .image(let image):
-                    try container.encode(image)
-                case .lottie(let lottie):
-                    try container.encode(lottie)
-                case .icon(let icon):
-                    try container.encode(icon)
-                }
-                var typeContainer = encoder.container(keyedBy: TypeCodingKey.self)
-                switch self {
-                case .image:
-                    try typeContainer.encode(ParseCodingKey.image, forKey: .type)
-                case .lottie:
-                    try typeContainer.encode(ParseCodingKey.lottie, forKey: .type)
-                case .icon:
-                    try typeContainer.encode(ParseCodingKey.icon, forKey: .type)
-                }
-            }
-
             private enum TypeCodingKey: String, CodingKey {
                 case type
             }
 
-            private enum ParseCodingKey: String, CodingKey, Codable {
+            private enum ParseCodingKey: String, CodingKey, Decodable {
                 case image = "image"
                 case lottie = "lottie"
                 case icon = "icon"
@@ -142,14 +100,14 @@ final class SealedGeneratorTests: XCTestCase {
     func testSealedMacros_FailCase() {
         let source = """
         @Sealed(typeParseRule: .lowerCase)
-        enum ImageSource: Codable {
+        enum ImageSource: Decodable {
             case image(Image)
             case lottie(Lottie)
             case icon
         }
         """
         let expected = """
-        enum ImageSource: Codable {
+        enum ImageSource: Decodable {
             case image(Image)
             case lottie(Lottie)
             case icon
